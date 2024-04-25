@@ -14,6 +14,7 @@ from datetime import datetime
 import logging
 from logging import handlers
 from logging.handlers import RotatingFileHandler
+import shutil
 import sys
 from sendgrid.helpers.mail import (Mail,
                                    Attachment,
@@ -81,6 +82,12 @@ def gen_debug_subject() -> str:
     city_name = 'Ogre City Apartments for sale from ss.lv webscraper'
     return city_name + release + email_created
 
+def copy_pdf_to_host(source_path, dest_path):
+    try:
+        shutil.copy(source_path, dest_path)
+        log.info(f"Successfully copied Ogre_city_report.pdf to {dest_path}")
+    except Exception as e:
+        log.error(f"Error copying Ogre_city_report.pdf: {e}")
 
 def sendgrid_mailer_main() -> None:
     """Main module entry point"""
@@ -103,45 +110,30 @@ def sendgrid_mailer_main() -> None:
         mail_body_text += ''.join(file_object.readlines())
 
     # Creates Mail object instance
-    message = Mail(
-        from_email=(os.environ.get('SRC_EMAIL')),
-        to_emails=(os.environ.get('DEST_EMAIL')),
-        subject=debug_subject,
-        plain_text_content=mail_body_text)
+    # message = Mail(
+    #     from_email=(os.environ.get('SRC_EMAIL')),
+    #     to_emails=(os.environ.get('DEST_EMAIL')),
+    #     subject=debug_subject,
+    #     plain_text_content=mail_body_text)
 
-    report_file_exists = os.path.exists('Ogre_city_report.pdf')
-    log.info("Checking if file Ogre_city_report.pdf"
-             " exists and reading as binary ")
+    report_file_path = 'Ogre_city_report.pdf'
+    report_file_exists = os.path.exists(report_file_path)
+    log.info("Checking if file Ogre_city_report.pdf exists and reading as binary ")
     if report_file_exists:
-        # Binary read pdf file
-        file_path = 'Ogre_city_report.pdf'
-        with open(file_path, 'rb') as file_object:
-            data = file_object.read()
-            file_object.close()
+        # Copy the PDF to the specified directory on the host machine
+        host_reports_directory = '/app/reports'  # This should match your host directory in Docker Compose
+        copy_pdf_to_host(report_file_path, host_reports_directory)
 
-        # Encodes data with base64 for email attachment
-        encoded_file = base64.b64encode(data).decode()
-
-        # Creates instance of Attachment object
-        log.info("Attaching  encoded Ogre_city_report.pdf to email object")
-        attached_file = Attachment(
-            file_content=FileContent(encoded_file),
-            file_type=FileType('application/pdf'),
-            file_name=FileName('Ogre_city_report.pdf'),
-            disposition=Disposition('attachment'),
-            content_id=ContentId('Example Content ID'))
-
-        # Calls attachment method for message instance
-        message.attachment = attached_file
 
     try:
-        log.info("Attempting to send email via Sendgrid API")
-        sendgrid_client = SendGridAPIClient(os.environ.get('SENDGRID_API_KEY'))
-        response = sendgrid_client.send(message)
-        log.info(f"Email sent with response code: {response.status_code}")
-        log.info(" --- Email response body --- ")
+        log.info("extracting ogre_city_report.pdf from docker to hostmachine")
+        # log.info("Attempting to send email via Sendgrid API")
+        # sendgrid_client = SendGridAPIClient(os.environ.get('SENDGRID_API_KEY'))
+        # response = sendgrid_client.send(message)
+        # log.info(f"Email sent with response code: {response.status_code}")
+        # log.info(" --- Email response body --- ")
         # log.info(f" {response.body} ")
-        log.info(" --- Email response headers --- ")
+        # log.info(" --- Email response headers --- ")
         # log.info(f" {response.headers}")
     except Exception as e:
         log.info(f"{e.message}")

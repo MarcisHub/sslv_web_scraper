@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
-
-""" This module downloads latest file from AWS S3 bucket """
+""" This module downloads the latest file from an AWS S3 bucket """
 import os
 import boto3
 import logging
@@ -29,45 +28,54 @@ fh.setFormatter(ws_log_format)
 log.addHandler(fh)
 
 
-# S3_BUCKET_NAME = os.environ['S3_BUCKET']
-S3_LAMBDA_BUCKET_NAME = "lambda-ogre-scraped-data"
+S3_LAMBDA_BUCKET_NAME = "lambda-ogre-scraped-data-marcitis"
 AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
 AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
-s3 = boto3.client('s3', region_name="eu-west-1",
-                  aws_access_key_id=AWS_ACCESS_KEY_ID,
-                  aws_secret_access_key=AWS_SECRET_ACCESS_KEY)
+
+try:
+    s3 = boto3.client('s3', region_name="eu-west-1",
+                      aws_access_key_id=AWS_ACCESS_KEY_ID,
+                      aws_secret_access_key=AWS_SECRET_ACCESS_KEY)
+except Exception as e:
+    log.error(f"Error connecting to AWS S3: {e}")
+    sys.exit(1)
 
 
 def download_file_from_s3(remote_file_name: str) -> None:
-    """ Downloads file from AWS S3 bucket to current directory """
+    """ Downloads a file from an AWS S3 bucket to the current directory """
     curr_dir = os.getcwd()
-    local_path_fn = curr_dir + "/" + remote_file_name
+    if remote_file_name is None:
+        log.error("No file name retrieved from S3. Skipping download.")
+        return
+    local_path_fn = os.path.join(curr_dir, remote_file_name)
     log.info(f"Local path file name: {local_path_fn}")
     try:
-        log.info(f"Trying to download rfn: {remote_file_name} "
-                 f"to lfn: {local_path_fn} from S3:"
-                 f" {S3_LAMBDA_BUCKET_NAME}")
-        s3.download_file(S3_LAMBDA_BUCKET_NAME,
-                         remote_file_name, local_path_fn)
+        log.info(f"Trying to download {remote_file_name} from S3 bucket: {S3_LAMBDA_BUCKET_NAME}")
+        s3.download_file(S3_LAMBDA_BUCKET_NAME, remote_file_name, local_path_fn)
+        log.info(f"File {remote_file_name} downloaded successfully.")
     except Exception as err:
-        print(f"Error {err}")
-        log.error(f"File download failed with : {err}")
+        log.error(f"File download failed: {err}")
 
 
 def get_last_file_name(s3_bucket_name: str) -> str:
-    """ Returns file name of object based on LastModified object attribute """
-    log.info(f"Getting last object from S3 buncked {s3_bucket_name}")
-    def get_last_modified(obj): return int(obj['LastModified'].strftime('%s'))
-    objs = s3.list_objects_v2(Bucket=s3_bucket_name)['Contents']
-    last_added = [obj['Key'] for obj in sorted(objs,
-                                               key=get_last_modified,
-                                               reverse=True)][0]
-    log.info(f"Found last S3 bucket object {last_added}")
-    return last_added
+    """ Returns the file name of the object based on the LastModified attribute """
+    log.info(f"Getting last object from S3 bucket: {s3_bucket_name}")
+    try:
+        objs = s3.list_objects_v2(Bucket=s3_bucket_name).get('Contents', [])
+        if objs:
+            last_added = max(objs, key=lambda x: x['LastModified'])['Key']
+            log.info(f"Found last S3 bucket object: {last_added}")
+            return last_added
+        else:
+            log.warning(f"No objects found in S3 bucket: {s3_bucket_name}")
+            return None
+    except Exception as e:
+        log.error(f"Error occurred while listing objects in S3 bucket: {e}")
+        return None
 
 
 def move_file_to(folder: str, src_file_name: str, dst_file_name: str) -> None:
-    """Moves file into the specified folder."""
+    """ Moves a file into the specified folder """
     if not os.path.exists(folder):
         os.makedirs(folder)
     src_path = os.path.join(os.getcwd(), src_file_name)
@@ -81,12 +89,12 @@ def move_file_to(folder: str, src_file_name: str, dst_file_name: str) -> None:
 
 def download_latest_lambda_file() -> None:
     """ Main entry point """
-    last_modifed_file_name = get_last_file_name(S3_LAMBDA_BUCKET_NAME)
-    download_file_from_s3(last_modifed_file_name)
-    log.info(f"File {last_modifed_file_name} download was sucessfull")
-    move_file_to('local_lambda_raw_scraped_data',
-                 last_modifed_file_name,
-                 last_modifed_file_name)
+    last_modified_file_name = get_last_file_name(S3_LAMBDA_BUCKET_NAME)
+    if last_modified_file_name:
+        download_file_from_s3(last_modified_file_name)
+        move_file_to('local_lambda_raw_scraped_data', last_modified_file_name, last_modified_file_name)
+    else:
+        log.warning("No file found in S3 bucket. Skipping download and move operations.")
 
 
 if __name__ == "__main__":

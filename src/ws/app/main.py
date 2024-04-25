@@ -72,8 +72,8 @@ async def run_long_task(city: str):
         analytics_main()
         log.info("Running pdf_creator task: using cloud ws file ")
         pdf_creator_main()
-        log.info("Running sendgrid_mailer task: using cloud ws file")
-        sendgrid_mailer_main()
+        #log.info("Running sendgrid_mailer task: using cloud ws file")
+        #sendgrid_mailer_main()
         return {
             "message": "FAST_API: scrape Ogre city apartments"
                        " task using cloud ws file run completed"
@@ -99,8 +99,8 @@ async def run_long_task(city: str):
         analytics_main()
         log.info("Running pdf_creator task: using locally scraped")
         pdf_creator_main()
-        log.info("Running sendgrid_mailer task: using locally scraped file")
-        sendgrid_mailer_main()
+        # log.info("Running sendgrid_mailer task: using locally scraped file")
+        # sendgrid_mailer_main()
         log.info("sendgrid_mailer_main task completed")
         return {"message": "FAST_API: scrape Ogre city apartments "
                 "task using local scrape job was completed"}
